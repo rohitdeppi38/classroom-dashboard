@@ -57,9 +57,11 @@ export const securityMiddleware = async (req:Request,res:Response,next:NextFunct
             return res.status(409).json({error:'Too many requests.',message});
         }
 
+        return next();
+
     } catch (error) {
         console.error('Arcjet middleware error',error);
-        res.status(500).json({erro:'Internal Error',message:'somthing went wrong with security middleware'});
+        return res.status(500).json({erro:'Internal Error',message:'somthing went wrong with security middleware'});
     }
 
 }
