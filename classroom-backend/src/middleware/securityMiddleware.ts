@@ -28,7 +28,7 @@ export const securityMiddleware = async (req:Request,res:Response,next:NextFunct
                 message='Guest request limit exceeded(5 per minute). please sign up for more limits.';
         }
 
-        const client = aj.withrule(
+        const client = aj.withRule(
             slidingWindow(
                { mode:'LIVE',
                 interval:'1m',
@@ -54,12 +54,14 @@ export const securityMiddleware = async (req:Request,res:Response,next:NextFunct
         }
 
         if(decision.isDenied() && decision.reason.isRateLimit()){
-            return res.status(403).json({error:'Too many requests.',message});
+            return res.status(409).json({error:'Too many requests.',message});
         }
+
+        return next();
 
     } catch (error) {
         console.error('Arcjet middleware error',error);
-        res.status(500).json({erro:'Internal Error',message:'somthing went wrong with security middleware'});
+        return res.status(500).json({erro:'Internal Error',message:'somthing went wrong with security middleware'});
     }
 
 }
