@@ -4,12 +4,12 @@ AgentAPI.config();
 import express from 'express'
 import cors from 'cors'
 
-import subjectsRouter from './routes/subjects';
-import { securityMiddleware } from './middleware/securityMiddleware';
+import subjectsRouter from './routes/subjects.js';
+import { securityMiddleware } from './middleware/securityMiddleware.js';
 
 
 import { toNodeHandler } from "better-auth/node";
-import { auth } from './lib/auth';
+import { auth } from './lib/auth.js';
 
 
 const app = express();
