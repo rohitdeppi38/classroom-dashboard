@@ -1,7 +1,7 @@
 
 import express from 'express'
 import { db } from '../db/db.js';
-import { classes } from '../db/schema';
+import { classes } from '../db/schema/app.js';
 
 
 const router = express.Router();
