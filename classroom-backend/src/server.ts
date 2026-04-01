@@ -6,6 +6,8 @@ import cors from 'cors'
 
 import subjectsRouter from './routes/subjects.js';
 import usersRouter from './routes/users.js';
+import classesRouter from './routes/classes.js'
+
 import { securityMiddleware } from './middleware/securityMiddleware.js';
 
 
@@ -34,6 +36,7 @@ app.use(securityMiddleware)
 
 app.use('/api/subjects',subjectsRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/classes',classesRouter);
 
 app.get('/',(req,res)=>{
     res.send('Hello welcome to the classroom API');

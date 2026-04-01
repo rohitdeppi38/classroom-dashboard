@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 
 
 import { BACKEND_BASE_URL } from "@/constants"
-import { ListResponse } from "@/types";
+import { CreateResponse, ListResponse } from "@/types";
 import {CreateDataProviderOptions,createDataProvider} from "@refinedev/rest"
 import { HttpError } from '@refinedev/core';
 
@@ -69,7 +69,19 @@ const options: CreateDataProviderOptions={
 
         return payload.pagination?.total ?? payload.data?.length ?? 0;
       }
-    }
+    },
+
+    create:{
+      getEndpoint:({resource})=>resource,
+
+      buildBodyParams:async ({variables})=>variables,
+
+      mapResponse:async(response)=>{
+        const json :CreateResponse = await response.json();
+        return json.data ?? [];
+      }
+    },
+    
 }
 
 const {dataProvider} = createDataProvider(BACKEND_BASE_URL,options);

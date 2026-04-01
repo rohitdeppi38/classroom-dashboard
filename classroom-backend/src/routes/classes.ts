@@ -1,7 +1,7 @@
 
 import express from 'express'
 import { db } from '../db/db.js';
-import { classes } from '../db/schema.js';
+import { classes } from '../db/schema';
 
 
 const router = express.Router();
@@ -21,3 +21,5 @@ router.post('/',async(req,res)=>{
         res.status(500).json({error:error});
     }
 })
+
+export default router;
