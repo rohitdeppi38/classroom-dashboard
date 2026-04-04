@@ -1,3 +1,4 @@
+import { GetOneResponse } from './../types/index';
 
 import { Search } from 'lucide-react';
 
@@ -88,6 +89,14 @@ const options: CreateDataProviderOptions={
       }
     },
     
+    getOne:{
+      getEndpoint:({resource,id}) => `${resource}/${id}`,
+
+      mapResponse:async(response)=>{
+        const json : GetOneResponse = await response.json();
+         return json.data ?? [];
+      }
+    }
 }
 
 const {dataProvider} = createDataProvider(BACKEND_BASE_URL,options);

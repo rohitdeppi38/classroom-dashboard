@@ -22,6 +22,7 @@ import SubjectsCreate from './pages/subjects/create'
 
 import ClassesList from './pages/classes/list'
 import ClassesCreate from './pages/classes/create'
+import ClassesShow from './pages/classes/show'
 
 
 function App() {
@@ -43,7 +44,7 @@ function App() {
                 [
                   {name:'dashboard',list:'/',meta:{label:'Home',icon:<Home/>}},
                   {name:'subjects',list:'/subjects',create:'/subjects/create',meta:{label:'Subjects',icon:<Book/>}},
-                  {name:'classes',list:'/classes',create:'/classes/create',meta:{label:'classes',icon:<GraduationCap/>}}
+                  {name:'classes',list:'/classes',create:'/classes/create',show:"/classes/show/:id",meta:{label:'classes',icon:<GraduationCap/>}}
                 ]
               }
             >
@@ -61,6 +62,7 @@ function App() {
                   <Route path="classes">
                     <Route index element={<ClassesList/>}/>
                     <Route path="create" element={<ClassesCreate/>}/>
+                    <Route path="show/:id" element={<ClassesShow/>}/>
                   </Route>
                 </Route>
               </Routes>
