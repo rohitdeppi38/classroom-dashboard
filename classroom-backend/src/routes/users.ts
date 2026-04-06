@@ -68,4 +68,92 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get user by ID
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [userDetails] = await db
+            .select()
+            .from(user)
+            .where(eq(user.id, id));
+
+        if (!userDetails) return res.status(404).json({ error: 'User not found' });
+
+        res.status(200).json({ data: userDetails });
+    } catch (error) {
+        console.log(`GET /users/:id error`, error);
+        res.status(500).json({ error: 'failed to get user' });
+    }
+});
+
+// Create user
+router.post('/', async (req, res) => {
+    try {
+        const { name, email, role, image } = req.body;
+        
+        // Basic check
+        const [existing] = await db.select().from(user).where(eq(user.email, email));
+        if (existing) {
+             return res.status(400).json({ error: 'User with this email already exists' });
+        }
+
+        const id = Math.random().toString(36).substring(2, 15); // generated ID
+
+        const [createdUser] = await db
+            .insert(user)
+            .values({ id, name, email, role: role || 'student', emailVerified: true, image })
+            .returning();
+
+        res.status(201).json({ data: createdUser });
+    } catch (error) {
+        console.log(`POST /users error`, error);
+        res.status(500).json({ error: 'failed to create user' });
+    }
+});
+
+// Update user
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, email, role, image, emailVerified } = req.body;
+
+        if (email) {
+            const [existing] = await db.select().from(user).where(and(eq(user.email, email), sql`id != ${id}`));
+            if (existing) {
+                 return res.status(400).json({ error: 'User with this email already exists' });
+            }
+        }
+
+        const [updatedUser] = await db
+            .update(user)
+            .set({ name, email, role, image, emailVerified, updatedAt: new Date() })
+            .where(eq(user.id, id))
+            .returning();
+
+        if (!updatedUser) return res.status(404).json({ error: 'User not found' });
+
+        res.status(200).json({ data: updatedUser });
+    } catch (error) {
+        console.log(`PUT /users error`, error);
+        res.status(500).json({ error: 'failed to update user' });
+    }
+});
+
+// Delete user
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [deleted] = await db.delete(user).where(eq(user.id, id)).returning();
+        
+        if (!deleted) return res.status(404).json({ error: 'User not found' });
+
+        res.status(200).json({ data: deleted });
+    } catch (error) {
+        console.log(`DELETE /users error`, error);
+        res.status(500).json({ error: 'failed to delete user' });
+    }
+});
+
 export default router;

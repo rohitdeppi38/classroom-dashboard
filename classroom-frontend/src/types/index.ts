@@ -4,7 +4,8 @@ export type Subject ={
     code:string;
     description:string;
     department:string;
-    cretaedAt:string;
+    created_at:string;
+    updated_at:string;
 }
 
 export type ListResponse<T = unknown> = {
@@ -92,6 +93,7 @@ export type Schedule = {
 export type Department = {
   id: number;
   name: string;
+  code: string;
   description: string;
 };
 

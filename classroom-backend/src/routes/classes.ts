@@ -126,4 +126,125 @@ router.post('/',async(req,res)=>{
     }
 })
 
+// Update class
+router.put('/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'Invalid class ID' });
+
+        const { name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId } = req.body;
+
+        const [updatedClass] = await db
+            .update(classes)
+            .set({ name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId, updated_at: new Date() })
+            .where(eq(classes.id, id))
+            .returning();
+
+        if (!updatedClass) return res.status(404).json({ error: 'Class not found' });
+
+        res.status(200).json({ data: updatedClass });
+    } catch (error) {
+        console.log(`PUT /classes error`, error);
+        res.status(500).json({ error: 'failed to update class' });
+    }
+});
+
+// Delete class
+router.delete('/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'Invalid class ID' });
+
+        const [deleted] = await db.delete(classes).where(eq(classes.id, id)).returning();
+        
+        if (!deleted) return res.status(404).json({ error: 'Class not found' });
+
+        res.status(200).json({ data: deleted });
+    } catch (error) {
+        console.log(`DELETE /classes error`, error);
+        res.status(500).json({ error: 'failed to delete class' });
+    }
+});
+
+// ENROLLMENTS
+import { enrollments } from '../db/schema/app.js';
+
+// Get enrollments for a class
+router.get('/:id/enroll', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'Invalid class ID' });
+
+        const enrollmentsList = await db
+            .select({
+                ...getTableColumns(enrollments),
+                student: { ...getTableColumns(user) }
+            })
+            .from(enrollments)
+            .leftJoin(user, eq(enrollments.studentId, user.id))
+            .where(eq(enrollments.classId, id));
+
+        res.status(200).json({ data: enrollmentsList });
+    } catch (error) {
+        console.log(`GET /classes/:id/enroll error:`, error);
+        res.status(500).json({ error: 'failed to get enrollments' });
+    }
+});
+
+// Enroll a student
+router.post('/:id/enroll', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'Invalid class ID' });
+
+        const { studentId } = req.body;
+        if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+
+        // Check capacity
+        const [cls] = await db.select().from(classes).where(eq(classes.id, id));
+        if (!cls) return res.status(404).json({ error: 'Class not found' });
+
+        const countResult = await db.select({ count: sql<number>`count(*)` }).from(enrollments).where(eq(enrollments.classId, id));
+        const currentCount = Number(countResult[0]?.count) || 0;
+
+        if (currentCount >= cls.capacity) {
+             return res.status(400).json({ error: 'Class capacity reached' });
+        }
+
+        // Check if already enrolled
+        const [existing] = await db.select().from(enrollments).where(and(eq(enrollments.classId, id), eq(enrollments.studentId, studentId)));
+        if (existing) {
+             return res.status(400).json({ error: 'Student already enrolled' });
+        }
+
+        const [enrollment] = await db.insert(enrollments).values({ classId: id, studentId }).returning();
+
+        res.status(201).json({ data: enrollment });
+    } catch (error) {
+        console.log(`POST /classes/:id/enroll error:`, error);
+        res.status(500).json({ error: 'failed to enroll student' });
+    }
+});
+
+// Unenroll a student
+router.delete('/:id/enroll/:studentId', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { studentId } = req.params;
+        if (isNaN(id)) return res.status(400).json({ error: 'Invalid class ID' });
+
+        const [deleted] = await db
+            .delete(enrollments)
+            .where(and(eq(enrollments.classId, id), eq(enrollments.studentId, studentId)))
+            .returning();
+        
+        if (!deleted) return res.status(404).json({ error: 'Enrollment not found' });
+
+        res.status(200).json({ data: deleted });
+    } catch (error) {
+        console.log(`DELETE /classes/:id/enroll error:`, error);
+        res.status(500).json({ error: 'failed to unenroll student' });
+    }
+});
+
 export default router;

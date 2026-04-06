@@ -56,6 +56,15 @@ const options: CreateDataProviderOptions={
             if(field==='subject') params.subject = value;
             if(field==='teacher') params.teacher = value;
           }
+
+          if(resource==='departments'){
+             if(field==='name' || field==='code') params.search = value;
+          }
+
+          if(resource==='users'){
+             if(field==='name' || field==='email') params.search = value;
+             if(field==='role') params.role = value;
+          }
         })
         return params;
       },
@@ -94,6 +103,28 @@ const options: CreateDataProviderOptions={
 
       mapResponse:async(response)=>{
         const json : GetOneResponse = await response.json();
+         return json.data ?? [];
+      }
+    },
+
+    update:{
+      getEndpoint:({resource,id}) => `${resource}/${id}`,
+
+      buildBodyParams:async ({variables})=>variables,
+
+      mapResponse:async(response)=>{
+         if(!response.ok) throw await buildHttpError(response);
+         const json = (await response.json()) as { data?: any };
+         return json.data ?? [];
+      }
+    },
+
+    deleteOne:{
+      getEndpoint:({resource,id}) => `${resource}/${id}`,
+
+      mapResponse:async(response)=>{
+         if(!response.ok) throw await buildHttpError(response);
+         const json = (await response.json()) as { data?: any };
          return json.data ?? [];
       }
     }

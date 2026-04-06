@@ -1,8 +1,8 @@
 import { AdvancedImage } from "@cloudinary/react";
-import { useShow } from "@refinedev/core";
+import { useShow, useCustomMutation, useList, useInvalidate } from "@refinedev/core";
 import { useTable } from "@refinedev/react-table";
 import { ColumnDef } from "@tanstack/react-table";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router";
 
 import { DataTable } from "@/components/refine-ui/data-table/data-table";
@@ -16,15 +16,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { bannerPhoto } from "@/lib/cloudinary";
-import { ClassDetails } from "@/types";
+import { ClassDetails, User } from "@/types";
+import { Loader2 } from "lucide-react";
 
-type ClassUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  image?: string | null;
+type EnrollmentRecord = {
+  id: number;
+  studentId: string;
+  classId: number;
+  student: User;
 };
 
 const ClassesShow = () => {
@@ -36,66 +37,108 @@ const ClassesShow = () => {
   });
 
   const classDetails = query.data?.data;
+  
+  const invalidate = useInvalidate();
 
-  const studentColumns = useMemo<ColumnDef<ClassUser>[]>(
+  const { mutate, mutation } = useCustomMutation();
+  const isEnrolling = mutation?.isLoading || mutation?.isPending;
+
+  const [selectedStudent, setSelectedStudent] = useState<string>("");
+
+  const { query: studentsQuery } = useList<User>({
+    resource: "users",
+    filters: [{ field: "role", operator: "eq", value: "student" }],
+    pagination: { pageSize: 100 },
+  });
+
+  const unenrollMutation = useCustomMutation();
+
+  const handleEnroll = () => {
+    if (!selectedStudent) return;
+    mutate(
+      {
+        url: `classes/${classId}/enroll`,
+        method: "post",
+        values: { studentId: selectedStudent },
+      },
+      {
+        onSuccess: () => {
+          setSelectedStudent("");
+          invalidate({ resource: `classes/${classId}/enroll`, invalidates: ["list"] });
+          invalidate({ resource: "classes", invalidates: ["detail"] }); // refresh capacity maybe
+        },
+      }
+    );
+  };
+
+  const handleUnenroll = (studentId: string) => {
+    unenrollMutation.mutate(
+      {
+        url: `classes/${classId}/enroll/${studentId}`,
+        method: "delete",
+        values: {}
+      },
+      {
+         onSuccess: () => {
+             invalidate({ resource: `classes/${classId}/enroll`, invalidates: ["list"] });
+         }
+      }
+    )
+  }
+
+  const studentColumns = useMemo<ColumnDef<EnrollmentRecord>[]>(
     () => [
       {
         id: "name",
-        accessorKey: "name",
+        accessorKey: "student.name",
         size: 240,
         header: () => <p className="column-title">Student</p>,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
             <Avatar className="size-7">
-              {row.original.image && (
-                <AvatarImage src={row.original.image} alt={row.original.name} />
+              {row.original.student?.image && (
+                <AvatarImage src={row.original.student.image} alt={row.original.student?.name} />
               )}
-              <AvatarFallback>{getInitials(row.original.name)}</AvatarFallback>
+              <AvatarFallback>{getInitials(row.original.student?.name)}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col truncate">
-              <span className="truncate">{row.original.name}</span>
+              <span className="truncate">{row.original.student?.name}</span>
               <span className="text-xs text-muted-foreground truncate">
-                {row.original.email}
+                {row.original.student?.email}
               </span>
             </div>
           </div>
         ),
       },
       {
-        id: "details",
+        id: "actions",
         size: 140,
-        header: () => <p className="column-title">Details</p>,
+        header: () => <p className="column-title">Actions</p>,
         cell: ({ row }) => (
-          <ShowButton
-            resource="users"
-            recordItemId={row.original.id}
-            variant="outline"
-            size="sm"
-          >
-            View
-          </ShowButton>
+          <div className="flex gap-2">
+            <ShowButton
+                resource="users"
+                recordItemId={row.original.student?.id}
+                variant="outline"
+                size="sm"
+            >
+                View
+            </ShowButton>
+            <Button variant="destructive" size="sm" onClick={() => handleUnenroll(row.original.studentId)}>Remove</Button>
+          </div>
         ),
       },
     ],
     []
   );
 
-  const studentsTable = useTable<ClassUser>({
+  const studentsTable = useTable<EnrollmentRecord>({
     columns: studentColumns,
     refineCoreProps: {
-      resource: `classes/${classId}/users`,
+      resource: `classes/${classId}/enroll`,
       pagination: {
-        pageSize: 3,
+        pageSize: 10,
         mode: "server",
-      },
-      filters: {
-        permanent: [
-          {
-            field: "role",
-            operator: "eq",
-            value: "student",
-          },
-        ],
       },
     },
   });
@@ -126,6 +169,11 @@ const ClassesShow = () => {
   const placeholderUrl = `https://placehold.co/600x400?text=${encodeURIComponent(
     teacherInitials || "NA"
   )}`;
+  
+  // Calculate enrollments count dynamically from table? 
+  // It should be fetched properly, but for now we look at studentsTable data
+  const enrollmentsCount = (studentsTable as any).options?.data?.length || 0;
+  const isAtCapacity = enrollmentsCount >= classDetails.capacity;
 
   return (
     <ShowView className="class-view class-show space-y-6">
@@ -159,12 +207,14 @@ const ClassesShow = () => {
         <div>
           <div className="details-header">
             <div>
-              <h1>{classDetails.name}</h1>
+              <h1 className="flex items-center gap-3">{classDetails.name} <Badge variant="outline">Invite Code: {classDetails.inviteCode}</Badge></h1>
               <p>{classDetails.description}</p>
             </div>
 
             <div>
-              <Badge variant="outline">{classDetails.capacity} spots</Badge>
+              <Badge variant={isAtCapacity ? "destructive" : "outline"}>
+                {enrollmentsCount} / {classDetails.capacity} spots
+              </Badge>
               <Badge
                 variant={
                   classDetails.status === "active" ? "default" : "secondary"
@@ -176,28 +226,29 @@ const ClassesShow = () => {
             </div>
           </div>
 
-          <div className="details-grid">
+          <div className="details-grid mt-4">
             <div className="instructor">
-              <p>👨‍🏫 Instructor</p>
-              <div>
+              <p className="font-semibold text-muted-foreground mb-2 flex items-center gap-2"><span className="text-xl">👨‍🏫</span> Instructor</p>
+              <div className="flex items-center gap-3 bg-secondary/20 p-3 rounded-lg border">
                 <img
                   src={classDetails.teacher?.image ?? placeholderUrl}
                   alt={teacherName}
+                  className="w-10 h-10 rounded-full"
                 />
 
                 <div>
-                  <p>{teacherName}</p>
-                  <p>{classDetails?.teacher?.email}</p>
+                  <p className="font-medium leading-none">{teacherName}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{classDetails?.teacher?.email}</p>
                 </div>
               </div>
             </div>
 
             <div className="department">
-              <p>🏛️ Department</p>
+              <p className="font-semibold text-muted-foreground mb-2 flex items-center gap-2"><span className="text-xl">🏛️</span> Department</p>
 
-              <div>
-                <p>{classDetails?.department?.name}</p>
-                <p>{classDetails?.department?.description}</p>
+              <div className="bg-secondary/20 p-3 rounded-lg border">
+                <p className="font-medium">{classDetails?.department?.name}</p>
+                <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{classDetails?.department?.description}</p>
               </div>
             </div>
           </div>
@@ -207,33 +258,51 @@ const ClassesShow = () => {
 
         {/* Subject Card */}
         <div className="subject">
-          <p>📚 Subject</p>
+          <p className="font-semibold text-muted-foreground mb-2 flex items-center gap-2"><span className="text-xl">📚</span> Subject</p>
 
-          <div>
+          <div className="bg-secondary/20 p-4 rounded-lg border flex gap-4">
             <Badge variant="outline">
-              Code: <span>{classDetails?.subject?.code}</span>
+              {classDetails?.subject?.code}
             </Badge>
-            <p>{classDetails?.subject?.name}</p>
-            <p>{classDetails?.subject?.description}</p>
+            <div>
+              <p className="font-medium">{classDetails?.subject?.name}</p>
+              <p className="text-sm text-muted-foreground mt-1">{classDetails?.subject?.description}</p>
+            </div>
           </div>
         </div>
 
         <Separator />
 
         {/* Join Class Section */}
-        <div className="join">
-          <h2>🎓 Join Class</h2>
-
-          <ol>
-            <li>Ask your teacher for the invite code.</li>
-            <li>Click on &quot;Join Class&quot; button.</li>
-            <li>Paste the code and click &quot;Join&quot;</li>
-          </ol>
+        <div className="join bg-primary/5 rounded-lg p-6 border border-primary/20">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><span className="text-2xl">🎓</span> Admin: Enroll Student</h2>
+          
+          <div className="flex flex-col sm:flex-row gap-3 items-center">
+            <div className="w-full">
+              <Select value={selectedStudent} onValueChange={setSelectedStudent} disabled={studentsQuery.isLoading}>
+                <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select a student to enroll" />
+                </SelectTrigger>
+                <SelectContent>
+                    {studentsQuery.data?.data?.map(student => (
+                        <SelectItem key={student.id} value={student.id}>
+                            {student.name} ({student.email})
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button size="lg" className="w-full sm:w-auto whitespace-nowrap" onClick={handleEnroll} disabled={!selectedStudent || isEnrolling || isAtCapacity}>
+                {isEnrolling ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : null}
+                {isAtCapacity ? "Class Full" : "Enroll Student"}
+            </Button>
+          </div>
+          {isAtCapacity && (
+              <p className="text-destructive text-sm mt-2 font-medium">Cannot enroll more students, class capacity reached.</p>
+          )}
         </div>
 
-        <Button size="lg" className="w-full">
-          Join Class
-        </Button>
       </Card>
 
       <Card className="hover:shadow-md transition-shadow">
